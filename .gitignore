@@ -14,3 +14,4 @@ bazel-bin
 bazel-guest-oslogin
 bazel-out
 bazel-testlog
+MODULE.bazel.lock
