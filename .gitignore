@@ -13,5 +13,5 @@ src/google_authorized_principals
 bazel-bin
 bazel-guest-oslogin
 bazel-out
-bazel-testlog
+bazel-testlogs
 MODULE.bazel.lock
