@@ -10,3 +10,7 @@ selinux/oslogin.pp
 test/new_test_runner
 test/test_runner
 src/google_authorized_principals
+bazel-bin/
+bazel-guest-oslogin/
+bazel-out/
+bazel-testlog/
