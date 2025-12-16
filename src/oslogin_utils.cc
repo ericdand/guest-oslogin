@@ -438,7 +438,7 @@ bool HttpDo(const string& url, const string& data, string* response, long* http_
   CURLcode code(CURLE_FAILED_INIT);
   curl_global_init(CURL_GLOBAL_ALL & ~CURL_GLOBAL_SSL);
   CURL* curl = curl_easy_init();
-  std::ostringstream response_stream;
+
   int retry_count = 0;
   if (curl) {
     struct curl_slist* header_list = NULL;
@@ -448,13 +448,30 @@ bool HttpDo(const string& url, const string& data, string* response, long* http_
       curl_global_cleanup();
       return false;
     }
+
+    char* response_buf;
+    size_t response_stream_len;
+    FILE* response_stream;
+
     do {
       // Apply backoff strategy before retrying.
       if (retry_count > 0) {
         sleep(kBackoffDuration);
+        // Discard response from last request, before opening a new buffer.
+        fflush(response_stream);
+        fclose(response_stream);
+        free(response_buf);
       }
-      response_stream.str("");
-      response_stream.clear();
+
+      /* man 3 open_memstream says:
+       *
+       * > The function dynamically allocates the buffer, and the buffer
+       * > automatically grows as needed. ... After closing the stream, the
+       * > caller should free(3) this buffer.
+       *
+       * So, don't forget to free(response_buf)! */
+      response_stream = open_memstream(&response_buf, &response_stream_len);
+
       curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
       curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &OnCurlWrite);
       curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_stream);
@@ -466,15 +483,27 @@ bool HttpDo(const string& url, const string& data, string* response, long* http_
 
       code = curl_easy_perform(curl);
       if (code != CURLE_OK) {
+        curl_slist_free_all(header_list);
+        fclose(response_stream);
+        free(response_buf);
         curl_easy_cleanup(curl);
         curl_global_cleanup();
         return false;
       }
+
       curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, http_code);
     } while (retry_count++ < kMaxRetries && ShouldRetry(*http_code));
+
     curl_slist_free_all(header_list);
+    // Flush to the stream before using its buffer's contents.
+    fflush(response_stream);
+    // Copy reply buffer to the output param.
+    response->assign(response_buf, response_stream_len);
+    // Now we can finally clean up the buffered stream.
+    fclose(response_stream);
+    free(response_buf);
   }
-  *response = response_stream.str();
+
   curl_easy_cleanup(curl);
   curl_global_cleanup();
   return true;
