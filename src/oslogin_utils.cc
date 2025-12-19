@@ -404,17 +404,6 @@ bool NssCache::NssGetgrentHelper(BufferManager* buf, struct group* result, int* 
 
 // ----------------- HTTP functions -----------------
 
-size_t OnCurlWrite(void* buf, size_t size, size_t nmemb, void* userp) {
-  if (userp) {
-    std::ostream& os = *static_cast<std::ostream*>(userp);
-    std::streamsize len = size * nmemb;
-    if (os.write(static_cast<char*>(buf), len)) {
-      return len;
-    }
-  }
-  return 0;
-}
-
 bool ShouldRetry(long http_code) {
   if (http_code == 200) {
     // Request returned successfully, no need to retry.
@@ -444,20 +433,26 @@ bool HttpDo(const string& url, const string& data, string* response, long* http_
     struct curl_slist* header_list = NULL;
     header_list = curl_slist_append(header_list, "Metadata-Flavor: Google");
     if (header_list == NULL) {
+      SysLogErr("Failed to initialize curl headers list.");
       curl_easy_cleanup(curl);
       curl_global_cleanup();
       return false;
     }
 
+    // These will hold the response from the request.
     char* response_buf;
     size_t response_stream_len;
     FILE* response_stream;
+    // This will only be used if there's an error from curl.
+    char curlerrbuf[CURL_ERROR_SIZE] = { 0 };
 
     do {
       // Apply backoff strategy before retrying.
       if (retry_count > 0) {
+        SysLogErr("Failed curl call %s; about to try retry number %d...",
+                  url, retry_count);
         sleep(kBackoffDuration);
-        // Discard response from last request, before opening a new buffer.
+        // Discard response from last request before opening a new buffer.
         fflush(response_stream);
         fclose(response_stream);
         free(response_buf);
@@ -471,10 +466,19 @@ bool HttpDo(const string& url, const string& data, string* response, long* http_
        *
        * So, don't forget to free(response_buf)! */
       response_stream = open_memstream(&response_buf, &response_stream_len);
+      if (response_stream == NULL) {
+        int err = errno;
+        SysLogErr("Failed to allocate buffer to hold response: %s",
+                  strerror(err));
+        curl_slist_free_all(header_list);
+        curl_easy_cleanup(curl);
+        curl_global_cleanup();
+        return false;
+      }
 
       curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
-      curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &OnCurlWrite);
-      curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_stream);
+      curl_easy_setopt(curl, CURLOPT_WRITEDATA, response_stream);
+      curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curlerrbuf);
       curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5);
       curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
       if (data != "") {
@@ -483,6 +487,7 @@ bool HttpDo(const string& url, const string& data, string* response, long* http_
 
       code = curl_easy_perform(curl);
       if (code != CURLE_OK) {
+        SysLogErr("Error during curl call to %s: %s", url, curlerrbuf);
         curl_slist_free_all(header_list);
         fclose(response_stream);
         free(response_buf);
