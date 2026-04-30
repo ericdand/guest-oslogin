@@ -152,7 +152,7 @@ pam_sm_authenticate(pam_handle_t* pamh, int flags, int argc,
     prompt << "\n\nEnter the number for the authentication method to use: ";
 
     char *choice = NULL;
-    if (pam_prompt(pamh, PAM_PROMPT_ECHO_ON, &choice, "%s",
+    if (pam_prompt(pamh, PAM_PROMPT_ECHO_OFF, &choice, "%s",
                    prompt.str().c_str()) != PAM_SUCCESS) {
       pam_error(pamh, "Unable to get user input");
       return PAM_PERM_DENIED;
@@ -185,32 +185,32 @@ pam_sm_authenticate(pam_handle_t* pamh, int flags, int argc,
 
   char *user_token = NULL;
   if (challenge.type == INTERNAL_TWO_FACTOR) {
-    if (pam_prompt(pamh, PAM_PROMPT_ECHO_ON, &user_token,
+    if (pam_prompt(pamh, PAM_PROMPT_ECHO_OFF, &user_token,
                    "Enter your security code: ") != PAM_SUCCESS) {
       pam_error(pamh, "Unable to get user input");
       return PAM_PERM_DENIED;
     }
   } else if (challenge.type == SECURITY_KEY_OTP) {
-    if (pam_prompt(pamh, PAM_PROMPT_ECHO_ON, &user_token,
+    if (pam_prompt(pamh, PAM_PROMPT_ECHO_OFF, &user_token,
         "Enter your security code by visiting https://g.co/sc: ") != PAM_SUCCESS) {
       pam_error(pamh, "Unable to get user input");
       return PAM_PERM_DENIED;
     }
   } else if (challenge.type == TOTP) {
-    if (pam_prompt(pamh, PAM_PROMPT_ECHO_ON, &user_token,
+    if (pam_prompt(pamh, PAM_PROMPT_ECHO_OFF, &user_token,
                    "Enter your one-time password: ") != PAM_SUCCESS) {
       pam_error(pamh, "Unable to get user input");
       return PAM_PERM_DENIED;
     }
   } else if (challenge.type == AUTHZEN) {
-    if (pam_prompt(pamh, PAM_PROMPT_ECHO_ON, &user_token,
+    if (pam_prompt(pamh, PAM_PROMPT_ECHO_OFF, &user_token,
                    "A login prompt has been sent to your enrolled device. "
                    "Press enter to continue") != PAM_SUCCESS) {
       pam_error(pamh, "Unable to get user input");
       return PAM_PERM_DENIED;
     }
   } else if (challenge.type == IDV_PREREGISTERED_PHONE) {
-    if (pam_prompt(pamh, PAM_PROMPT_ECHO_ON, &user_token,
+    if (pam_prompt(pamh, PAM_PROMPT_ECHO_OFF, &user_token,
                    "A security code has been sent to your phone. "
                    "Enter code to continue: ") != PAM_SUCCESS) {
       pam_error(pamh, "Unable to get user input");
